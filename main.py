@@ -5,74 +5,74 @@ import pandas as pd
 from tkinter import Tk
 from tkinter.filedialog import askdirectory
 
+
+def request_directory_from_user(prompt_message):
+    Tk().withdraw()  # Hide the root window as we don't want a full GUI
+    directory_path = askdirectory(title=prompt_message)  # Open dialog box and return the path
+    return directory_path
+
+
+def create_output_file_path(output_dir):
+    current_date = datetime.now().strftime('%m-%d-%Y')
+    output_file_name = f'Hyperlinks_{current_date}.xlsx'
+    output_file_path = os.path.join(output_dir, output_file_name)
+    return output_file_path
+
+
+def generate_data_from_files(directory):
+    data = {'Exhibit Number': [], 'Description': [], 'Hyperlink': []}
+
+    for file_number, file_name in enumerate(os.listdir(directory), start=1):
+        file_path = os.path.join(directory, file_name)
+        file_uri = Path(file_path).as_uri()
+
+        data['Exhibit Number'].append(file_number)
+        data['Description'].append(file_name)
+        data['Hyperlink'].append(file_uri)
+
+    return data
+
+
+def create_excel_file(dataframe, output_file_path):
+    writer = pd.ExcelWriter(output_file_path, engine='xlsxwriter')
+
+    dataframe.to_excel(writer, sheet_name='Sheet1', startrow=1, header=False, index=False)
+
+    workbook = writer.book
+    worksheet = writer.sheets['Sheet1']
+
+    header_format = workbook.add_format({'bold': True, 'text_wrap': True})
+
+    for column_number, column_name in enumerate(dataframe.columns.values):
+        worksheet.write(0, column_number, column_name, header_format)
+
+    for row_number, hyperlink in enumerate(dataframe['Hyperlink'], start=1):
+        worksheet.write_url(row_number, 2, hyperlink)
+
+    writer.close()
+
+
 def main():
-    # Ask the user for the input directory
-    Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
-    folder_path = askdirectory(title='Please select the directory to get files from') # show an "Open" dialog box and return the path
-    if not folder_path: # if user clicked cancel, then folder_path will be an empty string
+    input_dir = request_directory_from_user('Please select the directory to get files from')
+    if not input_dir:
         print("No input directory selected. Exiting.")
         return
 
-    # Ask the user for the output directory
-    output_dir = askdirectory(title='Please select the output directory') # show an "Open" dialog box and return the path
-    if not output_dir: # if user clicked cancel, then output_dir will be an empty string
+    output_dir = request_directory_from_user('Please select the output directory')
+    if not output_dir:
         print("No output directory selected. Exiting.")
         return
 
     os.makedirs(output_dir, exist_ok=True)
+    output_file_path = create_output_file_path(output_dir)
 
-    # Get the current date
-    date = datetime.now().strftime('%m-%d-%Y')
+    if os.path.exists(output_file_path):
+        os.remove(output_file_path)
 
-    # Output file
-    output_file = os.path.join(output_dir, f'Hyperlinks_{date}.xlsx')
+    file_data = generate_data_from_files(input_dir)
+    dataframe = pd.DataFrame(file_data)
 
-    # Check if the file already exists and remove it
-    if os.path.exists(output_file):
-        os.remove(output_file)
-
-    # Prepare a DataFrame to hold the data
-    data = {'Exhibit Number': [], 'Description': [], 'Hyperlink': []}
-
-    # Loop through each file in the directory
-    for i, filename in enumerate(os.listdir(folder_path), start=1):
-        file_path = os.path.join(folder_path, filename)
-
-        # Create a Path object and then get the URI
-        file_uri = Path(file_path).as_uri()
-
-        # Add the exhibit number (i), description (filename) and hyperlink to the data
-        data['Exhibit Number'].append(i)
-        data['Description'].append(filename)
-        data['Hyperlink'].append(file_uri)
-
-    df = pd.DataFrame(data)
-
-    # Create a Pandas Excel writer using XlsxWriter as the engine.
-    writer = pd.ExcelWriter(output_file, engine='xlsxwriter')
-
-    # Convert the DataFrame to an XlsxWriter Excel object. Note that we turn off
-    # the default header and skip one row to allow us to insert a user defined
-    # header.
-    df.to_excel(writer, sheet_name='Sheet1', startrow=1, header=False, index=False)
-
-    # Get the xlsxwriter workbook and worksheet objects.
-    workbook = writer.book
-    worksheet = writer.sheets['Sheet1']
-
-    # Add a header format.
-    header_format = workbook.add_format({'bold': True, 'text_wrap': True})
-
-    # Write the column headers with the defined format.
-    for col_num, value in enumerate(df.columns.values):
-        worksheet.write(0, col_num, value, header_format)
-
-    # Write hyperlinks
-    for row_num, link in enumerate(df['Hyperlink'], start=1):
-        worksheet.write_url(row_num, 2, link)
-
-    # Close the Pandas Excel writer and output the Excel file.
-    writer.close()
+    create_excel_file(dataframe, output_file_path)
 
 
 if __name__ == "__main__":
